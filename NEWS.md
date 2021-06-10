@@ -1,3 +1,23 @@
+# EloOptimized 0.3.1
+
+* Mostly a maintenance update
+
+* Removed tcltk, rlist dependencies (holdovers from older code)
+
+* Streamlined some things under the hood to make post-processing more efficient in eloratingopt & eloratingfixed
+
+* EloOrdinal column in output now stored as an integer object for small space saving.
+
+* Added a vignette to demonstrate usage of the package, see [here](https://jtfeld.github.io/EloOptimized/articles/nba-example.html).
+
+* Added cleaning step to avoid error when trying to use tibbles imported with readr::read_csv()
+
+* Added additional informative errors if input data are problematic
+
+* Fixed small bug related to converting character dates to Date class
+
+* Incorporated github actions for CI checks, pkgdown build
+
 # EloOptimized 0.3.0
 
 * Added Travis-ci integration in preparation for submission to CRAN

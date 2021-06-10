@@ -47,7 +47,7 @@
 #'      \item{Elo}{: fitted Elo scores for each individual on each day}
 #'      \item{EloOrdinal}{: Daily ordinal rank based on Elo scores}
 #'      \item{EloScaled}{: Daily Elo scores rescaled between 0 and 1 according to 
-#'        \code{([individual Elo] - min([daily Elo scores])/(max([daily Elo scores]) - min([daily Elo scores]))}}
+#'        \deqn{([individual Elo] - min([daily Elo scores])/(max([daily Elo scores]) - min([daily Elo scores]))}}
 #'      \item{ExpNumBeaten}{: expected number of individuals in the group beaten, which is the sum of 
 #'        winning probabilities based on relative Elo scores of an individual and all others, following 
 #'        equation (4) in Foerster, Franz et al. 2016}
@@ -78,8 +78,6 @@
 #' @importFrom rlang .data
 #' @import reshape2
 #' @import BAMMtools
-#' @import tcltk
-#' @import rlist
 #' @importFrom magrittr "%>%"
 
 
@@ -97,6 +95,10 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
   if(!all(names(ago) %in% c("Date", "Winner", "Loser"))){
     stop("colnames in agonistic data should be 'Date', 'Winner', 'Loser' (not case sensitive)")
   }
+  
+  # to clean up data from readr::read_csv()
+  attr(ago, "spec") = NULL
+  ago = as.data.frame(ago)
   
   ago$Winner = as.character(ago$Winner)
   ago$Loser = as.character(ago$Loser)
@@ -124,14 +126,17 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
   } else {
     
     presence <- pres_data
+    # clean up data from readr::read_csv()
+    attr(presence, "spec") = NULL
+    presence = as.data.frame(presence)
     names(presence) = tolower(names(presence))
     if(!all(names(presence) %in% c("id", "start_date", "end_date"))){
       stop("colnames in presence data should be 'id', 'start_date', 'end_date' (not case sensitive)")
     }
-    if(class(pres_data$start_date) != "Date"){
-      pres_data$start_date = lubridate::mdy(pres_data$start_date)}
-    if(class(pres_data$end_date) != "Date"){
-      pres_data$end_date = lubridate::mdy(pres_data$end_date)}
+    if(class(presence$start_date) != "Date"){
+      presence$start_date = lubridate::mdy(presence$start_date)}
+    if(class(presence$end_date) != "Date"){
+      presence$end_date = lubridate::mdy(presence$end_date)}
     
     presence$id = as.character(presence$id)
     
@@ -183,6 +188,28 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
   presence = presence[,-4] # remove dummy variable
   
   all_inds = sort(presence$id)
+  
+  
+  if(mod_type == 1 & nrow(ago) <= 100){
+    stop("Currently you can't fit only K with less than 100 interactions (after filtering) due to burn in")
+  }
+  
+  # error in case all interactions fall outside presence window:
+  if(any(apply(presence, MARGIN = 1, function(x){
+      
+      sum(ago$Date >= x[2] & ago$Date <= x[3] & (ago$Winner == x[1] | ago$Loser == x[1]))
+      
+    }) == 0)){
+    
+    bad = sum((apply(presence, MARGIN = 1, function(x){
+      
+      sum(ago$Date >= x[2] & ago$Date <= x[3] & (ago$Winner == x[1] | ago$Loser == x[1]))
+      
+    })) == 0)
+    
+    stop(paste(bad, "individual(s) have no interactions within their presence window after filtering"))
+    
+  }
   
   
   # ---------------   Fit models  --------------------------------
@@ -237,7 +264,7 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
     df <- model_log[, names(model_log) %in% c("Date", "Winner", "Loser", "elo_w_after", "elo_l_after")] #model_log[, c(1:3, 6:7)]
     seq_long <- reshape(df, varying=list(c(2:3), c(4:5)), v.names=c("Individual", "EloScoreAfter"), direction="long")
     # Format columns
-    df2 <- seq_long[,c(1,3,4)]
+    df2 <- seq_long[,c(1,3,4)] # make this a dplyr::select, then dplyr::arrange 
     
     #skipping step with the male models to add starting elo scores. Thus in male models 
     # individuals start being ranked after their first interaction, whereas
@@ -246,7 +273,7 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
   }
   
   # Order by date and ID
-  df2 <- df2[order(df2$Date, df2$Individual),]  
+  df2 <- df2[order(df2$Date, df2$Individual),]  # maybe can remove this, appears default behavior is to reorder...
   
   # Use max achieved score per day
   df2_daymax <-
@@ -266,90 +293,109 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
   presence_long <- do.call(rbind.data.frame, temp)
   presence_long$Individual = as.character(presence_long$Individual)
   
+  # 
+  # presence_long$Elo = df2_daymax$EloScoreAfterMax[match(paste0(presence_long$Individual, presence_long$Date),
+  #                                                       paste0(df2_daymax$Individual, df2_daymax$Date))]
   
-  presence_long$Elo = df2_daymax$EloScoreAfterMax[match(paste0(presence_long$Individual, presence_long$Date),
-                                                        paste0(df2_daymax$Individual, df2_daymax$Date))]
+  # add elo scores to presence data and interpolate:
   
-  presence_long = 
-    presence_long %>%
+  presence_long = dplyr::left_join(x = presence_long, y = df2_daymax, 
+                                    by = c("Individual" = "Individual", "Date" = "Date")) %>% 
+    dplyr::rename(Elo = .data$EloScoreAfterMax) %>%
     dplyr::group_by(.data$Individual) %>%
     dplyr::mutate(Elo_interpol = approx(.data$Elo, xout = 1:length(.data$Elo), 
                                         rule = 1:2, method = "constant")$y) %>%
     as.data.frame()
   
-  elo_data2 = dplyr::filter(presence_long, !is.na(.data$Elo_interpol)) %>% 
+  # post-processing:
+  
+  elo_long = 
+    dplyr::filter(presence_long, !is.na(.data$Elo_interpol)) %>% 
     dplyr::select(-.data$Elo) %>% 
     dplyr::rename(EloScore = .data$Elo_interpol) %>%
-    as.data.frame()
-  
-  elo_long =
-    elo_data2 %>%
     dplyr::group_by(.data$Date) %>%
     dplyr::mutate(EloNorm = (.data$EloScore - min(.data$EloScore, na.rm = T))/
-                    (max(.data$EloScore, na.rm = T) - min(.data$EloScore, na.rm = T))) %>%
+                    (max(.data$EloScore, na.rm = T) - min(.data$EloScore, na.rm = T)),
+                  rank_ord = dplyr::row_number(dplyr::desc(.data$EloScore)),
+                  pct_beaten = cardinalize(.data$EloScore),
+                  elo_rel = relativize(.data$pct_beaten),
+                  JenksEloCardinal = jenksify(.data$elo_rel)) %>%
     dplyr::arrange(.data$Date, .data$Individual) %>%
+    dplyr::select(.data$Date, .data$Individual, Elo = .data$EloScore, 
+                  EloOrdinal = .data$rank_ord, EloScaled = .data$EloNorm, 
+                  ExpNumBeaten = .data$pct_beaten, EloCardinal = .data$elo_rel, 
+                  JenksEloCardinal = .data$JenksEloCardinal) %>%
     as.data.frame()
   
   
-  
+    # as.data.frame()
+    # 
+    # colnames(elo_long) <- c("Date", "Individual", "Elo", "EloOrdinal", "EloScaled", "ExpNumBeaten", "EloCardinal", "JenksEloCardinal")
+    # 
+    # 
   # ----------------- Step 2: Ordinal ranks by day -----------------------------------
   
-  elo_long$rank_ord <- ave(elo_long$EloScore, as.character(elo_long$Date), FUN = function(x) rank(-x, ties.method = "first"))
+  # elo_long$rank_ord <- ave(elo_long$EloScore, as.character(elo_long$Date), FUN = function(x) rank(-x, ties.method = "first"))
+  
+  # elo_long <- # don't forget to add the .data$ stuff in, but now we can combine this with the below steps!
+  #   elo_long %>% 
+  #   dplyr::group_by(.data$Date) %>% 
+  #   dplyr::mutate(rank_ord = dplyr::row_number(dplyr::desc(.data$EloScore))) %>%
+  #   as.data.frame()
   
   # ----------------- Step 3: Calculate cardinal ranks -------------------------------
   
   
-  cardinalize = function(x){
-    carddat = c()
-    carddat = sapply(x, function(y){
-      sum(1 / (1 + exp(-0.01*(y - x))), na.rm=T) - .5 #subtracting .5 is equivalent to removing the prob of winning against oneself
-      #b/c 1/(1 + exp(-0.01*0)) = 1/(1 + exp(0)) = 1/(1 + 1) = 1/2
-    })
-    return(carddat)
-  }
+  # cardinalize = function(x){
+  #   carddat = sapply(x, function(y){
+  #     sum(1 / (1 + exp(-0.01*(y - x))), na.rm=T) - .5 #subtracting .5 is equivalent to removing the prob of winning against oneself
+  #     #b/c 1/(1 + exp(-0.01*0)) = 1/(1 + exp(0)) = 1/(1 + 1) = 1/2
+  #   })
+  #   return(carddat)
+  # }
+  # 
+  # relativize = function(x){
+  #   reldat = sapply(x, function(y){
+  #     y/(length(x) - 1)
+  #   })
+  #   return(reldat)
+  # }
   
-  relativize = function(x){
-    reldat = c()
-    reldat = sapply(x, function(y){
-      y/(length(x) - 1)
-    })
-    return(reldat)
-  }
-  
-  elo_long =
-    elo_long %>%
-    dplyr::group_by(.data$Date) %>%
-    dplyr::mutate(pct_beaten = cardinalize(.data$EloScore),
-                  elo_rel = relativize(.data$pct_beaten)) %>%
-    as.data.frame()
+  # elo_long =
+  #   elo_long %>%
+  #   dplyr::group_by(.data$Date) %>%
+  #   dplyr::mutate(rank_ord = dplyr::row_number(dplyr::desc(.data$EloScore)),
+  #                 pct_beaten = cardinalize(.data$EloScore),
+  #                 elo_rel = relativize(.data$pct_beaten),
+  #                 JenksEloCardinal = jenksify(.data$elo_rel)) %>% # later combine this with the ordinal rank step!
+  #   as.data.frame()
   
   
   # --------------------- Step 4: Find natural breaks in list of elo scores by day --------------------
   
-  jenksify = function(x){
-    breaks = BAMMtools::getJenksBreaks(x, 4)
-    # cats = c()
-    cats = ifelse(x <= breaks[[2]], "low",
-                  ifelse(x > breaks[[3]], "high", "mid"))
-    return(cats)
-  }
+  # jenksify = function(x){
+  #   breaks = BAMMtools::getJenksBreaks(x, 4)
+  #   cats = ifelse(x <= breaks[[2]], "low",
+  #                 ifelse(x > breaks[[3]], "high", "mid"))
+  #   return(cats)
+  # }
   
-  elo_long =
-    elo_long %>%
-    dplyr::group_by(.data$Date) %>%
-    dplyr::mutate(JenksEloCardinal = jenksify(.data$elo_rel)) %>%
-    as.data.frame()
+  # elo_long =
+  #   elo_long %>%
+  #   dplyr::group_by(.data$Date) %>%
+  #   dplyr::mutate(JenksEloCardinal = jenksify(.data$elo_rel)) %>%
+  #   as.data.frame()
   
   
   # ------------------------ Step 5: prettify -----------------------------------
-  elo_long =
-    elo_long %>%
-    dplyr::select(.data$Date, .data$Individual, .data$EloScore, .data$rank_ord, .data$EloNorm, 
-                  .data$pct_beaten, .data$elo_rel, .data$JenksEloCardinal) %>%
-    as.data.frame()
-  
-  colnames(elo_long) <- c("Date", "Individual", "Elo", "EloOrdinal", "EloScaled", "ExpNumBeaten", "EloCardinal", "JenksEloCardinal")
-  
+  # elo_long =
+  #   elo_long %>%
+  #   dplyr::select(.data$Date, .data$Individual, .data$EloScore, .data$rank_ord, .data$EloNorm, 
+  #                 .data$pct_beaten, .data$elo_rel, .data$JenksEloCardinal) %>%
+  #   as.data.frame()
+  # 
+  # colnames(elo_long) <- c("Date", "Individual", "Elo", "EloOrdinal", "EloScaled", "ExpNumBeaten", "EloCardinal", "JenksEloCardinal")
+  # 
   # k = exp(model$par[1])
   # pred_accuracy
   # AIC = 2*as.numeric(model$value) + 2*length(model$par)
