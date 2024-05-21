@@ -4,7 +4,7 @@ knitr::opts_chunk$set(
   comment = "#>"
 )
 
-## ---- warning = FALSE, message = FALSE----------------------------------------
+## ----warning = FALSE, message = FALSE-----------------------------------------
 library(EloOptimized)
 library(dplyr)
 library(ggplot2)
@@ -12,7 +12,7 @@ library(ggplot2)
 ## -----------------------------------------------------------------------------
 res = eloratingfixed(agon_data = nba)
 
-## ---- fig.width = 9, fig.height = 6-------------------------------------------
+## ----fig.width = 9, fig.height = 6--------------------------------------------
 head(res$elo)
 
 res$elo %>%
@@ -26,7 +26,7 @@ tail(res$elo, 29) %>% arrange(-Elo) %>% select(-ExpNumBeaten, -JenksEloCardinal)
 ## -----------------------------------------------------------------------------
 res2 = eloratingopt(agon_data = nba)
 
-## ---- fig.width = 9, fig.height = 6-------------------------------------------
+## ----fig.width = 9, fig.height = 6--------------------------------------------
 res2$elo %>%
   rename(Team = Individual) %>%
   ggplot(aes(x = Date, y = Elo, color = Team)) + 
@@ -38,7 +38,7 @@ tail(res2$elo, 29) %>% arrange(-Elo) %>% select(-ExpNumBeaten, -JenksEloCardinal
 ## -----------------------------------------------------------------------------
 res3 = eloratingopt(agon_data = nba, fit_init_elo = TRUE)
 
-## ---- fig.width = 9, fig.height = 6-------------------------------------------
+## ----fig.width = 9, fig.height = 6--------------------------------------------
 res3$elo %>%
   rename(Team = Individual) %>%
   ggplot(aes(x = Date, y = Elo, color = Team)) + 

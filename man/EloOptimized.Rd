@@ -2,6 +2,7 @@
 % Please edit documentation in R/EloOptimized.R
 \docType{package}
 \name{EloOptimized}
+\alias{EloOptimized-package}
 \alias{EloOptimized}
 \title{EloOptimized: ML fitting of Elo Scores}
 \description{
@@ -26,7 +27,6 @@ Chimpanzee females queue but males compete for social status. Scientific Reports
   \item Make package more modular, with a more flexible wrapper function.
   \item Option to specify K during burn-in period when fitting only K
   \item Add additional example data
-  \item Create vignette, other package doohickies
   \item Add additional user control of the optimization procedure, allowing 
     for specification of the burn in period, optimization algorithm, and 
     initial values for optimization.
@@ -34,3 +34,21 @@ Chimpanzee females queue but males compete for social status. Scientific Reports
 }
 }
 
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/jtfeld/EloOptimized}
+  \item Report bugs at \url{https://github.com/jtfeld/EloOptimized/issues}
+}
+
+}
+\author{
+\strong{Maintainer}: Joseph Feldblum \email{jtf9@duke.edu}
+
+Authors:
+\itemize{
+  \item Steffen Foerster \email{sf2041@gmail.com}
+  \item Mathias Franz \email{m.franz@izw-berlin.de}
+}
+
+}

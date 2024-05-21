@@ -39,9 +39,9 @@
 #'   
 #' 
 #' @return Returns a list with five or six elements (depending on input): 
-#' \itemize{
+#' \describe{
 #'  \item{\strong{elo}}{ Data frame with all IDs and dates they were present, with the following columns:}
-#'    \itemize{
+#'    \describe{
 #'      \item{Date}{: Dates of study period}
 #'      \item{Individual}{: the names of each ranked individual, for each date they were present}
 #'      \item{Elo}{: fitted Elo scores for each individual on each day}
@@ -76,6 +76,7 @@
 #' @importFrom stats approx ave optim reshape
 #' @importFrom utils read.csv write.csv
 #' @importFrom rlang .data
+#' @importFrom methods is
 #' @import reshape2
 #' @import BAMMtools
 #' @importFrom magrittr "%>%"
@@ -107,8 +108,17 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
     stop("can't have same ID win and lose in one interaction")
   }
   
-  if(class(ago$Date) != "Date"){
-    ago$Date = lubridate::mdy(ago$Date)
+  # if(class(ago$Date) != "Date"){
+  #   ago$Date = lubridate::mdy(ago$Date)
+  # }
+  if(!is(ago$Date, "Date")) ago$Date = lubridate::mdy(ago$Date)
+  
+  if(any(ago$Date < dplyr::lag(x = ago$Date, 
+                               n = 1, 
+                               # to avoid NA in first value
+                               default = min(ago$Date) - 
+                                lubridate::years(1)))){
+    warning("agon_data dates are not in chronological order!")
   }
   
   
@@ -133,10 +143,12 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
     if(!all(names(presence) %in% c("id", "start_date", "end_date"))){
       stop("colnames in presence data should be 'id', 'start_date', 'end_date' (not case sensitive)")
     }
-    if(class(presence$start_date) != "Date"){
-      presence$start_date = lubridate::mdy(presence$start_date)}
-    if(class(presence$end_date) != "Date"){
-      presence$end_date = lubridate::mdy(presence$end_date)}
+    # if(class(presence$start_date) != "Date"){
+    #   presence$start_date = lubridate::mdy(presence$start_date)}
+    if(!is(presence$start_date, "Date")) presence$start_date = lubridate::mdy(presence$start_date)
+    # if(class(presence$end_date) != "Date"){
+    #   presence$end_date = lubridate::mdy(presence$end_date)}
+    if(!is(presence$end_date, "Date")) presence$end_date = lubridate::mdy(presence$end_date)
     
     presence$id = as.character(presence$id)
     
@@ -185,6 +197,18 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
     
   }
   
+  if(!missing(pres_data)){
+    
+    if(nrow(presence) != nrow(pres_data)) {
+      
+      print(paste("NOTE:", 
+                  paste(setdiff(pres_data[,1], presence$id), collapse = ", "),
+                  "removed because they lacked at least one win and one loss"))
+      
+    } 
+    
+  }
+  
   presence = presence[,-4] # remove dummy variable
   
   all_inds = sort(presence$id)
@@ -199,15 +223,18 @@ eloratingopt <- function(agon_data, pres_data, fit_init_elo = FALSE, outputfile 
       
       sum(ago$Date >= x[2] & ago$Date <= x[3] & (ago$Winner == x[1] | ago$Loser == x[1]))
       
-    }) == 0)){
+    }) == 0)) {
     
-    bad = sum((apply(presence, MARGIN = 1, function(x){
+    badindex = which(apply(presence, MARGIN = 1, function(x){
       
       sum(ago$Date >= x[2] & ago$Date <= x[3] & (ago$Winner == x[1] | ago$Loser == x[1]))
       
-    })) == 0)
+    }) == 0)
     
-    stop(paste(bad, "individual(s) have no interactions within their presence window after filtering"))
+    # presence$id[badindex]
+    
+    stop(paste("the following individual(s) have interactions OUTSIDE, \n but not within, their presence window(s) after filtering:\n",
+               paste(presence$id[badindex], collapse = ", ")))
     
   }
   

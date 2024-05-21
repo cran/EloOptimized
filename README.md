@@ -5,11 +5,8 @@
 
 <!-- badges: start -->
 
-[![Travis-CI Build
-Status](https://travis-ci.org/jtfeld/EloOptimized.svg?branch=master)](https://travis-ci.org/jtfeld/EloOptimized)
-[![R build
-status](https://github.com/jtfeld/EloOptimized/workflows/R-CMD-check/badge.svg)](https://github.com/jtfeld/EloOptimized/actions?workflow=R-CMD-check)
-[![CRAN\_Status\_Badge](http://www.r-pkg.org/badges/version/EloOptimized)](https://cran.r-project.org/package=EloOptimized)
+[![R-CMD-check](https://github.com/jtfeld/EloOptimized/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/jtfeld/EloOptimized/actions/workflows/R-CMD-check.yaml)
+[![CRAN_Status_Badge](http://www.r-pkg.org/badges/version/EloOptimized)](https://cran.r-project.org/package=EloOptimized)
 [![](https://cranlogs.r-pkg.org/badges/grand-total/EloOptimized)](https://cran.r-project.org/package=EloOptimized)
 <!-- badges: end -->
 
@@ -48,7 +45,7 @@ calculate Elo scores using user-defined parameter values.
 nbaelo = eloratingopt(agon_data = nba, fit_init_elo = FALSE)
 
 # to generate Elo scores using fixed default initial Elo scores and default K:
-nbaelo = eloratingfixed(agon_data = nbadata, k = 100, init_elo = 1000)
+nbaelo = eloratingfixed(agon_data = nba, k = 100, init_elo = 1000)
 ```
 
 To recreate the results from the 2016 manuscript, use the following
